@@ -9,6 +9,7 @@ import TD3
 import OurDDPG
 import DDPG
 
+from td3_plot import plot_results
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
@@ -53,12 +54,17 @@ if __name__ == "__main__":
 	parser.add_argument("--save_model", action="store_true")        # Save model and optimizer parameters
 	parser.add_argument("--load_model", default="")                 # Model load file name, "" doesn't load, "default" uses file_name
 	parser.add_argument("--demo", action="store_true")              # Run a visual demo of the model
+	parser.add_argument("--plot_results", action="store_true")      # Generate a simple plot of the latest results
 	args = parser.parse_args()
 
 	file_name = f"{args.policy}_{args.env}_{args.seed}"
 	print("---------------------------------------")
 	print(f"Policy: {args.policy}, Env: {args.env}, Seed: {args.seed}")
 	print("---------------------------------------")
+
+	if args.plot_results:
+		plot_results(f"{args.policy}_{args.env}_{args.seed}", eval_freq=args.eval_freq)
+		exit(0)
 
 	if not os.path.exists("./results"):
 		os.makedirs("./results")
