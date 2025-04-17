@@ -12,18 +12,18 @@ import DDPG
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, eval_episodes=10):
-	eval_env = gym.make(env_name)
+def eval_policy(policy, env_name, seed, eval_episodes=10, render_mode=None):
+	eval_env = gym.make(env_name, render_mode=render_mode)
 	eval_env.reset(seed=seed + 100)
 
 	avg_reward = 0.
 	for _ in range(eval_episodes):
-		state, done = eval_env.reset(), False
+		state, done, truncated = eval_env.reset(), False, False
 		state = np.array(state[0], dtype=np.float32)
 
-		while not done:
+		while not done and not truncated:
 			action = policy.select_action(np.array(state))
-			state, reward, done, _, _ = eval_env.step(action)
+			state, reward, done, truncated, _ = eval_env.step(action)
 			avg_reward += reward
 
 	avg_reward /= eval_episodes
@@ -52,6 +52,7 @@ if __name__ == "__main__":
 	parser.add_argument("--policy_freq", default=2, type=int)       # Frequency of delayed policy updates
 	parser.add_argument("--save_model", action="store_true")        # Save model and optimizer parameters
 	parser.add_argument("--load_model", default="")                 # Model load file name, "" doesn't load, "default" uses file_name
+	parser.add_argument("--demo", action="store_true")              # Run a visual demo of the model
 	args = parser.parse_args()
 
 	file_name = f"{args.policy}_{args.env}_{args.seed}"
@@ -103,10 +104,15 @@ if __name__ == "__main__":
 
 	replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
 	
+	# Run the demo if required
+	if args.demo:
+		eval_policy(policy, args.env, args.seed, eval_episodes=1, render_mode="human")
+		exit(0)
+
 	# Evaluate untrained policy
 	evaluations = [eval_policy(policy, args.env, args.seed)]
 
-	state, done = env.reset(), False
+	state, done, truncated = env.reset(), False, False
 	state = np.array(state[0], dtype=np.float32)
 	episode_reward = 0
 	episode_timesteps = 0
@@ -126,7 +132,7 @@ if __name__ == "__main__":
 			).clip(-max_action, max_action)
 
 		# Perform action
-		next_state, reward, done, _, _ = env.step(action) 
+		next_state, reward, done, truncated, _ = env.step(action) 
 		done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
 
 		# Store data in replay buffer
@@ -139,11 +145,11 @@ if __name__ == "__main__":
 		if t >= args.start_timesteps:
 			policy.train(replay_buffer, args.batch_size)
 
-		if done: 
+		if done or truncated: 
 			# +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
 			print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
 			# Reset environment
-			state, done = env.reset(), False
+			state, done, truncated = env.reset(), False, False
 			state = np.array(state[0], dtype=np.float32)
 			episode_reward = 0
 			episode_timesteps = 0
