@@ -55,6 +55,8 @@ if __name__ == "__main__":
 	parser.add_argument("--load_model", default="")                 # Model load file name, "" doesn't load, "default" uses file_name
 	parser.add_argument("--demo", action="store_true")              # Run a visual demo of the model
 	parser.add_argument("--plot_results", action="store_true")      # Generate a simple plot of the latest results
+	parser.add_argument("--max_buffer_size", default=1e6, type=int) # Set the maximum size of the replay buffer
+	parser.add_argument("--no_replacement", action="store_true")    # Prevent batch replacement in the replay buffer samples
 	args = parser.parse_args()
 
 	file_name = f"{args.policy}_{args.env}_{args.seed}"
@@ -63,7 +65,7 @@ if __name__ == "__main__":
 	print("---------------------------------------")
 
 	if args.plot_results:
-		plot_results(f"{args.policy}_{args.env}_{args.seed}", eval_freq=args.eval_freq)
+		plot_results(f"{args.env}_{args.seed}", policy_name=args.policy, eval_freq=args.eval_freq)
 		exit(0)
 
 	if not os.path.exists("./results"):
@@ -108,7 +110,7 @@ if __name__ == "__main__":
 		policy_file = file_name if args.load_model == "default" else args.load_model
 		policy.load(f"./models/{policy_file}")
 
-	replay_buffer = utils.ReplayBuffer(state_dim, action_dim)
+	replay_buffer = utils.ReplayBuffer(state_dim, action_dim, max_size=int(args.max_buffer_size), prevent_replacement=args.no_replacement)
 	
 	# Run the demo if required
 	if args.demo:
@@ -139,10 +141,10 @@ if __name__ == "__main__":
 
 		# Perform action
 		next_state, reward, done, truncated, _ = env.step(action) 
-		done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
+		#done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
 
 		# Store data in replay buffer
-		replay_buffer.add(state, action, next_state, reward, done_bool)
+		replay_buffer.push(state, action, next_state, reward, done, truncated)
 
 		state = next_state
 		episode_reward += reward
