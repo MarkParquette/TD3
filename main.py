@@ -13,7 +13,7 @@ from td3_plot import plot_results
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, eval_episodes=20, render_mode=None):
+def eval_policy(policy, env_name, seed, eval_episodes=20, render_mode=None, max_eval=0.):
 	eval_env = gym.make(env_name, render_mode=render_mode)
 	eval_env.reset(seed=seed + 100)
 
@@ -30,7 +30,7 @@ def eval_policy(policy, env_name, seed, eval_episodes=20, render_mode=None):
 	avg_reward /= eval_episodes
 
 	print("---------------------------------------")
-	print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}")
+	print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f} -- Max: {max_eval:.3f}")
 	print("---------------------------------------")
 	return avg_reward
 
@@ -61,6 +61,9 @@ if __name__ == "__main__":
 	parser.add_argument("--no_replacement", action="store_true")    # Prevent batch replacement in the replay buffer samples
 	parser.add_argument("--dev", action="store_true")               # Development mode
 	args = parser.parse_args()
+
+	if args.dev:
+		args.policy = "TD3-DEV"
 
 	file_name = f"{args.policy}_{args.env}_{args.seed}"
 	print("---------------------------------------")
@@ -177,7 +180,7 @@ if __name__ == "__main__":
 
 		# Evaluate episode
 		if (t + 1) % args.eval_freq == 0:
-			evaluations.append(eval_policy(policy, args.env, args.seed))
+			evaluations.append(eval_policy(policy, args.env, args.seed, max_eval=max_eval))
 			max_eval = max(evaluations[-1], max_eval)
 			np.save(f"./results/{file_name}", evaluations)
 			if args.save_model: policy.save(f"./models/{file_name}")

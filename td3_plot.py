@@ -51,9 +51,10 @@ def plot_results(base_name, policy_name="TD3", eval_freq=5000, window_size=10, s
     for i in range(len(data)): x.append(i*eval_freq)
     if show_train: plt.plot(x, data, label=f"{policy}")
 
+    ave_mean = np.mean(ave)
     x_ave = []  
     for i in range(len(ave)): x_ave.append(i*eval_freq + offset)
-    if show_ave: plt.plot(x_ave, ave, label=f"{policy} (Ave)")
+    if show_ave: plt.plot(x_ave, ave, label=f"{policy} (Ave) {ave_mean:.2f}")
 
     max = np.max(data)
     max_data = []
