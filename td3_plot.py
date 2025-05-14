@@ -30,26 +30,30 @@ def sliding_average(data, window_size):
     # mode='valid' returns only the parts where the window fully overlaps with the input
     return np.convolve(data, weights, mode='valid')
 
-def plot_results(base_name, policy_name="TD3", eval_freq=5000, window_size=10):
+def plot_results(base_name, policy_name="TD3", eval_freq=5000, window_size=10, show_train=True, show_ave=True):
   plt.figure(figsize = (12, 7))
   plt.title(f"{base_name}")
   plt.xlabel("Timesteps")
   plt.ylabel("Ave. Reward")
 
-  policy_names = [policy_name]
+  policy_names = ["TD3", "TD3-DEV"]#, policy_name]
 
   for policy in policy_names:
-    data = np.load(f"./results/{policy}_{base_name}.npy")
+    try:
+      data = np.load(f"./results/{policy}_{base_name}.npy")
+    except:
+      continue
+    
     ave = sliding_average(data, window_size)
     offset = min(len(data), window_size) * eval_freq
 
     x = []  
     for i in range(len(data)): x.append(i*eval_freq)
-    plt.plot(x, data, label=f"{policy}")
+    if show_train: plt.plot(x, data, label=f"{policy}")
 
     x_ave = []  
     for i in range(len(ave)): x_ave.append(i*eval_freq + offset)
-    plt.plot(x_ave, ave, label=f"{policy} (Ave)")
+    if show_ave: plt.plot(x_ave, ave, label=f"{policy} (Ave)")
 
     max = np.max(data)
     max_data = []

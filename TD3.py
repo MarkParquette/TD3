@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import math
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -75,7 +75,8 @@ class TD3(object):
 		tau=0.005,
 		policy_noise=0.2,
 		noise_clip=0.5,
-		policy_freq=2
+		policy_freq=2,
+		dev_mode=False
 	):
 
 		self.actor = Actor(state_dim, action_dim, max_action).to(device)
@@ -92,6 +93,7 @@ class TD3(object):
 		self.policy_noise = policy_noise
 		self.noise_clip = noise_clip
 		self.policy_freq = policy_freq
+		self.dev_mode = dev_mode
 
 		self.total_it = 0
 
@@ -101,11 +103,11 @@ class TD3(object):
 		return self.actor(state).cpu().data.numpy().flatten()
 
 
-	def train(self, replay_buffer, batch_size=256):
+	def train(self, replay_buffer, batch_size=256, last_eval=None):
 		self.total_it += 1
 
 		# Sample replay buffer 
-		state, action, next_state, reward, _, not_done = replay_buffer.sample(batch_size)
+		state, action, next_state, reward, _, not_done, ep_done, G = replay_buffer.sample(batch_size, last_eval)
 
 		with torch.no_grad():
 			# Select action according to policy and add clipped noise

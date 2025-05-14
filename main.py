@@ -13,7 +13,7 @@ from td3_plot import plot_results
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, eval_episodes=10, render_mode=None):
+def eval_policy(policy, env_name, seed, eval_episodes=20, render_mode=None):
 	eval_env = gym.make(env_name, render_mode=render_mode)
 	eval_env.reset(seed=seed + 100)
 
@@ -54,9 +54,12 @@ if __name__ == "__main__":
 	parser.add_argument("--save_model", action="store_true")        # Save model and optimizer parameters
 	parser.add_argument("--load_model", default="")                 # Model load file name, "" doesn't load, "default" uses file_name
 	parser.add_argument("--demo", action="store_true")              # Run a visual demo of the model
-	parser.add_argument("--plot_results", action="store_true")      # Generate a simple plot of the latest results
-	parser.add_argument("--max_buffer_size", default=1e6, type=int) # Set the maximum size of the replay buffer
+	parser.add_argument("--plot_results", action="store_true")      # Generate a simple plot of the latest raw training results
+	parser.add_argument("--plot_ave", action="store_true")          # Generate a simple plot of the latest average training results
+	parser.add_argument("--plot_all", action="store_true")          # Generate a simple plot of the latest raw and average training results
+	parser.add_argument("--max_buffer_size", default=1e5, type=int) # Set the maximum size of the replay buffer
 	parser.add_argument("--no_replacement", action="store_true")    # Prevent batch replacement in the replay buffer samples
+	parser.add_argument("--dev", action="store_true")               # Development mode
 	args = parser.parse_args()
 
 	file_name = f"{args.policy}_{args.env}_{args.seed}"
@@ -64,8 +67,16 @@ if __name__ == "__main__":
 	print(f"Policy: {args.policy}, Env: {args.env}, Seed: {args.seed}")
 	print("---------------------------------------")
 
-	if args.plot_results:
+	if args.plot_all:
 		plot_results(f"{args.env}_{args.seed}", policy_name=args.policy, eval_freq=args.eval_freq)
+		exit(0)
+
+	if args.plot_results:
+		plot_results(f"{args.env}_{args.seed}", policy_name=args.policy, eval_freq=args.eval_freq, show_ave=False)
+		exit(0)
+
+	if args.plot_ave:
+		plot_results(f"{args.env}_{args.seed}", policy_name=args.policy, eval_freq=args.eval_freq, show_train=False)
 		exit(0)
 
 	if not os.path.exists("./results"):
@@ -95,11 +106,12 @@ if __name__ == "__main__":
 	}
 
 	# Initialize policy
-	if args.policy == "TD3":
+	if args.policy.startswith("TD3"):
 		# Target policy smoothing is scaled wrt the action scale
 		kwargs["policy_noise"] = args.policy_noise * max_action
 		kwargs["noise_clip"] = args.noise_clip * max_action
 		kwargs["policy_freq"] = args.policy_freq
+		kwargs["dev_mode"] = args.dev
 		policy = TD3.TD3(**kwargs)
 	elif args.policy == "OurDDPG":
 		policy = OurDDPG.DDPG(**kwargs)
@@ -110,7 +122,7 @@ if __name__ == "__main__":
 		policy_file = file_name if args.load_model == "default" else args.load_model
 		policy.load(f"./models/{policy_file}")
 
-	replay_buffer = utils.ReplayBuffer(state_dim, action_dim, max_size=int(args.max_buffer_size), prevent_replacement=args.no_replacement)
+	replay_buffer = utils.ReplayBuffer(state_dim, action_dim, max_size=int(args.max_buffer_size), gamma=args.discount, prevent_replacement=args.no_replacement)
 	
 	# Run the demo if required
 	if args.demo:
@@ -119,6 +131,7 @@ if __name__ == "__main__":
 
 	# Evaluate untrained policy
 	evaluations = [eval_policy(policy, args.env, args.seed)]
+	max_eval = max(0., evaluations[-1])
 
 	state, done, truncated = env.reset(), False, False
 	state = np.array(state[0], dtype=np.float32)
@@ -140,8 +153,7 @@ if __name__ == "__main__":
 			).clip(-max_action, max_action)
 
 		# Perform action
-		next_state, reward, done, truncated, _ = env.step(action) 
-		#done_bool = float(done) if episode_timesteps < env._max_episode_steps else 0
+		next_state, reward, done, truncated, _ = env.step(action)
 
 		# Store data in replay buffer
 		replay_buffer.push(state, action, next_state, reward, done, truncated)
@@ -151,9 +163,9 @@ if __name__ == "__main__":
 
 		# Train agent after collecting sufficient data
 		if t >= args.start_timesteps:
-			policy.train(replay_buffer, args.batch_size)
+			policy.train(replay_buffer, args.batch_size, last_eval=max_eval)
 
-		if done or truncated: 
+		if done or truncated:
 			# +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
 			print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
 			# Reset environment
@@ -166,5 +178,6 @@ if __name__ == "__main__":
 		# Evaluate episode
 		if (t + 1) % args.eval_freq == 0:
 			evaluations.append(eval_policy(policy, args.env, args.seed))
+			max_eval = max(evaluations[-1], max_eval)
 			np.save(f"./results/{file_name}", evaluations)
 			if args.save_model: policy.save(f"./models/{file_name}")
