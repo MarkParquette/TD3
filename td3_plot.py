@@ -36,7 +36,7 @@ def plot_results(base_name, policy_name="TD3", eval_freq=5000, window_size=10, s
   plt.xlabel("Timesteps")
   plt.ylabel("Ave. Reward")
 
-  policy_names = ["TD3", "TD3-DEV"]#, policy_name]
+  policy_names = ["TD3", "TD3-DEV"]
 
   for policy in policy_names:
     try:
@@ -61,9 +61,9 @@ def plot_results(base_name, policy_name="TD3", eval_freq=5000, window_size=10, s
     for i in range(len(data)): max_data.append(max)
     plt.plot(x, max_data, label=f"{policy} (Max) {max:.2f}")
 
-  solved = 200.
-  solved_data = []
-  for i in range(len(data)): solved_data.append(solved)
+  #solved = 200.
+  #solved_data = []
+  #for i in range(len(data)): solved_data.append(solved)
   #plt.plot(x, solved_data, label=f"Solved Level {solved:.2f}")
 
   plt.legend()

@@ -103,11 +103,11 @@ class TD3(object):
 		return self.actor(state).cpu().data.numpy().flatten()
 
 
-	def train(self, replay_buffer, batch_size=256, last_eval=None):
+	def train(self, replay_buffer, batch_size=256, max_ave=None):
 		self.total_it += 1
 
 		# Sample replay buffer 
-		state, action, next_state, reward, _, not_done, ep_done, G = replay_buffer.sample(batch_size, last_eval)
+		state, action, next_state, reward, _, not_done, ep_done, G  = replay_buffer.sample(batch_size, max_ave)
 
 		with torch.no_grad():
 			# Select action according to policy and add clipped noise
@@ -124,6 +124,8 @@ class TD3(object):
 			target_Q = torch.min(target_Q1, target_Q2)
 			target_Q = reward + not_done * self.discount * target_Q
 
+			# Adjust target for development mode
+		
 		# Get current Q estimates
 		current_Q1, current_Q2 = self.critic(state, action)
 

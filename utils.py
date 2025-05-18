@@ -35,9 +35,11 @@ class ReplayBuffer(object):
 			G = 0.
 			T = 0.
 
+			n = 0
 			for sample in self.pending:
 				s, a, ns, r, d = sample
-				T += r
+				T += r * pow(self.gamma, n)
+				n += 1
 
 			while len(self.pending) > 0:
 				s, a, ns, r, d = self.pending.pop()
@@ -66,7 +68,7 @@ class ReplayBuffer(object):
 		self.size = min(self.size + 1, self.max_size)
 
 
-	def sample(self, batch_size, last_eval=None):
+	def sample(self, batch_size, max_ave=None):
 		if self.prevent_replacement:
 			ind = np.random.permutation(self.size)[:min(self.size, batch_size)]
 		else:
@@ -75,9 +77,10 @@ class ReplayBuffer(object):
 		# Clear low episodes
 		ep_done_tensor = torch.FloatTensor(self.episode_done[ind])
 
-		if last_eval is not None:
-			ep_tot_tensor = torch.FloatTensor(self.episode_total[ind])
-			ep_done_tensor = ep_done_tensor * torch.where(ep_tot_tensor > last_eval, 1., 0.)
+		if max_ave is not None:
+			tot_tensor = torch.FloatTensor(self.episode_total[ind])
+			ep_mask = torch.where((tot_tensor > max_ave), 1., 0.)
+			ep_done_tensor = ep_done_tensor * ep_mask
 			
 		ret = (
 			torch.FloatTensor(self.state[ind]).to(self.device),

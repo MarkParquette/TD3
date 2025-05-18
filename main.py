@@ -13,26 +13,32 @@ from td3_plot import plot_results
 
 # Runs policy for X episodes and returns average reward
 # A fixed seed is used for the eval environment
-def eval_policy(policy, env_name, seed, eval_episodes=20, render_mode=None, max_eval=0.):
+def eval_policy(policy, env_name, seed, eval_episodes=20, render_mode=None, max_eval=0., discount=0.99):
 	eval_env = gym.make(env_name, render_mode=render_mode)
 	eval_env.reset(seed=seed + 100)
 
 	avg_reward = 0.
+	disc_reward = 0.
+	
 	for _ in range(eval_episodes):
 		state, done, truncated = eval_env.reset(), False, False
 		state = np.array(state[0], dtype=np.float32)
-
+		ep_steps = 0
 		while not done and not truncated:
 			action = policy.select_action(np.array(state))
 			state, reward, done, truncated, _ = eval_env.step(action)
 			avg_reward += reward
-
+			disc_reward += reward * pow(discount, ep_steps)
+			ep_steps += 1
+	
 	avg_reward /= eval_episodes
+	disc_reward /= eval_episodes
+	max_eval = max(max_eval, disc_reward)
 
 	print("---------------------------------------")
-	print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f} -- Max: {max_eval:.3f}")
+	print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f} ({disc_reward:.3f}) -- Max Disc: {max_eval:.3f}")
 	print("---------------------------------------")
-	return avg_reward
+	return [disc_reward, avg_reward]
 
 
 if __name__ == "__main__":
@@ -100,6 +106,7 @@ if __name__ == "__main__":
 	action_dim = env.action_space.shape[0] 
 	max_action = float(env.action_space.high[0])
 
+
 	kwargs = {
 		"state_dim": state_dim,
 		"action_dim": action_dim,
@@ -129,22 +136,22 @@ if __name__ == "__main__":
 	
 	# Run the demo if required
 	if args.demo:
-		eval_policy(policy, args.env, args.seed, eval_episodes=1, render_mode="human")
+		eval_policy(policy, args.env, args.seed, eval_episodes=1, render_mode="human", discount=args.discount)
 		exit(0)
 
 	# Evaluate untrained policy
-	evaluations = [eval_policy(policy, args.env, args.seed)]
-	max_eval = max(0., evaluations[-1])
+	eval = eval_policy(policy, args.env, args.seed, discount=args.discount)
+	evaluations = [eval[0]]
+	max_eval = evaluations[-1]
 
 	state, done, truncated = env.reset(), False, False
 	state = np.array(state[0], dtype=np.float32)
 	episode_reward = 0
+	episode_disc = 0
 	episode_timesteps = 0
 	episode_num = 0
 
 	for t in range(int(args.max_timesteps)):
-		
-		episode_timesteps += 1
 
 		# Select action randomly or according to policy
 		if t < args.start_timesteps:
@@ -163,24 +170,28 @@ if __name__ == "__main__":
 
 		state = next_state
 		episode_reward += reward
+		episode_disc += reward * pow(args.discount, episode_timesteps)
+		episode_timesteps += 1
 
 		# Train agent after collecting sufficient data
 		if t >= args.start_timesteps:
-			policy.train(replay_buffer, args.batch_size, last_eval=max_eval)
+			policy.train(replay_buffer, args.batch_size, max_eval)
 
 		if done or truncated:
 			# +1 to account for 0 indexing. +0 on ep_timesteps since it will increment +1 even if done=True
-			print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f}")
+			print(f"Total T: {t+1} Episode Num: {episode_num+1} Episode T: {episode_timesteps} Reward: {episode_reward:.3f} ({episode_disc:.3f}) RPS: {episode_reward/episode_timesteps:.3f}")
 			# Reset environment
 			state, done, truncated = env.reset(), False, False
 			state = np.array(state[0], dtype=np.float32)
 			episode_reward = 0
+			episode_disc = 0
 			episode_timesteps = 0
 			episode_num += 1 
 
 		# Evaluate episode
 		if (t + 1) % args.eval_freq == 0:
-			evaluations.append(eval_policy(policy, args.env, args.seed, max_eval=max_eval))
+			eval = eval_policy(policy, args.env, args.seed, max_eval=max_eval, discount=args.discount)
+			evaluations.append(eval[0])
 			max_eval = max(evaluations[-1], max_eval)
 			np.save(f"./results/{file_name}", evaluations)
 			if args.save_model: policy.save(f"./models/{file_name}")
